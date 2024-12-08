@@ -1,4 +1,5 @@
-from fastapi import FastAPI
+import time
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -45,6 +46,8 @@ class BenchmarkRequest(BaseModel):
 
 @app.post("/benchmark")
 async def benchmark(req: BenchmarkRequest):
+    start_time = time.time()  # Start timing on the backend
+
     if not req.base_url or not req.model_name or not req.sentence:
         return JSONResponse(status_code=400, content={"success": False, "error": "Invalid input parameters."})
 
@@ -55,10 +58,12 @@ async def benchmark(req: BenchmarkRequest):
             format="json"
         )
     except Exception as e:
+        end_time = time.time()
         return JSONResponse(status_code=500, content={
             "success": False,
             "sentence": req.sentence,
-            "error": f"Failed to initialize model: {str(e)}"
+            "error": f"Failed to initialize model: {str(e)}",
+            "time_taken": int((end_time - start_time)*1000)
         })
 
     model_with_tools = model.bind_tools(
@@ -69,17 +74,21 @@ async def benchmark(req: BenchmarkRequest):
     try:
         result = agent_request_generator.invoke({"initial_request": req.sentence})
     except Exception as e:
+        end_time = time.time()
         return JSONResponse(status_code=500, content={
             "success": False,
             "sentence": req.sentence,
-            "error": f"Model invocation failed: {str(e)}"
+            "error": f"Model invocation failed: {str(e)}",
+            "time_taken": int((end_time - start_time)*1000)
         })
 
     if not isinstance(result, AIMessage):
+        end_time = time.time()
         return {
             "success": False,
             "sentence": req.sentence,
-            "error": "No valid AIMessage response from model."
+            "error": "No valid AIMessage response from model.",
+            "time_taken": int((end_time - start_time)*1000)
         }
 
     model_response = result.content.strip() if result.content else ""
@@ -95,50 +104,42 @@ async def benchmark(req: BenchmarkRequest):
             except Exception as e:
                 tool_output = f"Tool execution error: {str(e)}"
                 success = False
-
-            # If tool output indicates an error, success = False
             if "Tool execution error" in tool_output:
                 success = False
-
             tool_calls_data.append({
                 "name": tool_name,
                 "args": tool_args,
                 "output": tool_output
             })
 
-    # Determine final success:
-    # Case 1: model_response is non-empty => success
-    # Case 2: If model_response is empty, but we have at least one tool call that succeeded (no error) and non-empty output => success
-    # Otherwise => failure
-
-    # Check if there's any successful tool output
+    # Determine final success
     successful_tool_output = any(
         tc["output"] and "Tool execution error" not in tc["output"] 
         for tc in tool_calls_data
     )
 
-    # If model_response empty, rely on tool output
     if model_response == "":
         if not successful_tool_output:
             success = False
 
-    # If already marked success=false due to errors, keep it false
-    # Otherwise success remains true
-
     if not success:
+        end_time = time.time()
         return {
             "success": False,
             "sentence": req.sentence,
             "tool_calls": tool_calls_data,
             "model_response": model_response,
-            "error": "No successful response or tool execution."
+            "error": "No successful response or tool execution.",
+            "time_taken": int((end_time - start_time)*1000)
         }
 
+    end_time = time.time()
     return {
         "success": True,
         "sentence": req.sentence,
         "tool_calls": tool_calls_data,
-        "model_response": model_response
+        "model_response": model_response,
+        "time_taken": int((end_time - start_time)*1000) # Return time in ms
     }
 
 if __name__ == "__main__":
