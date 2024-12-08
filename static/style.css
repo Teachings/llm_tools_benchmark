@@ -1,0 +1,9 @@
+.highlight-processing {
+    background-color: #ffff99 !important;
+}
+.highlight-completed-success {
+    background-color: #d4edda !important;
+}
+.highlight-completed-failure {
+    background-color: #f8d7da !important;
+}
