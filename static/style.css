@@ -1,9 +1,9 @@
 .highlight-processing {
-    background-color: #ffff99 !important;
+    background-color: #fffae6 !important; /* Light yellow */
 }
 .highlight-completed-success {
-    background-color: #d4edda !important;
+    background-color: #d4edda !important; /* Light green from bootstrap alerts */
 }
 .highlight-completed-failure {
-    background-color: #f8d7da !important;
+    background-color: #f8d7da !important; /* Light red */
 }
