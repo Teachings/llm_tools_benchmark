@@ -1,4 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
+    const bodyEl = document.body;
+    const darkModeToggle = document.getElementById('darkModeToggle');
+
     const llm1BaseURLInput = document.getElementById('llm1BaseURL');
     const llm1ModelNameInput = document.getElementById('llm1ModelName');
     const llm2BaseURLInput = document.getElementById('llm2BaseURL');
@@ -9,6 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const enableLoggingCheck = document.getElementById('enableLogging');
     const sentencesTableBody = document.querySelector('#sentencesTable tbody');
 
+    const llm1Header = document.getElementById('llm1Header');
     const llm1ProgressText = document.getElementById('llm1ProgressText');
     const llm1ProgressBar = document.getElementById('llm1ProgressBar');
     const llm1SuccessCountElem = document.getElementById('llm1SuccessCount');
@@ -18,14 +22,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const llm1CurrentSection = document.getElementById('llm1CurrentSection');
     const llm1CurrentSentenceElem = document.getElementById('llm1CurrentSentence');
     const llm1CurrentResponseElem = document.getElementById('llm1CurrentResponse');
-    const llm1LastSection = document.getElementById('llm1LastSection');
-    const llm1LastSentenceElem = document.getElementById('llm1LastSentence');
-    const llm1LastResponseElem = document.getElementById('llm1LastResponse');
-    const llm1LastTimeElem = document.getElementById('llm1LastTime');
     const llm1PauseBtn = document.getElementById('llm1PauseBtn');
     const llm1ResumeBtn = document.getElementById('llm1ResumeBtn');
+    const llm1StopBtn = document.getElementById('llm1StopBtn');
 
     const llm2CardContainer = document.getElementById('llm2CardContainer');
+    const llm2Header = document.getElementById('llm2Header');
     const llm2ProgressText = document.getElementById('llm2ProgressText');
     const llm2ProgressBar = document.getElementById('llm2ProgressBar');
     const llm2SuccessCountElem = document.getElementById('llm2SuccessCount');
@@ -35,12 +37,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const llm2CurrentSection = document.getElementById('llm2CurrentSection');
     const llm2CurrentSentenceElem = document.getElementById('llm2CurrentSentence');
     const llm2CurrentResponseElem = document.getElementById('llm2CurrentResponse');
-    const llm2LastSection = document.getElementById('llm2LastSection');
-    const llm2LastSentenceElem = document.getElementById('llm2LastSentence');
-    const llm2LastResponseElem = document.getElementById('llm2LastResponse');
-    const llm2LastTimeElem = document.getElementById('llm2LastTime');
     const llm2PauseBtn = document.getElementById('llm2PauseBtn');
     const llm2ResumeBtn = document.getElementById('llm2ResumeBtn');
+    const llm2StopBtn = document.getElementById('llm2StopBtn');
 
     const totalTimeElem = document.getElementById('totalTime');
     const logsCard = document.getElementById('logsCard');
@@ -51,6 +50,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let llm1Paused = false;
     let llm2Paused = false;
+    let llm1Stopped = false;
+    let llm2Stopped = false;
 
     const citiesAndStates = [
         "New York, NY", "Los Angeles, CA", "Chicago, IL", "Houston, TX",
@@ -68,9 +69,14 @@ document.addEventListener('DOMContentLoaded', () => {
         "Is it going to rain tomorrow in [location]?"
     ];
 
-    function randomChoice(arr) {
-        return arr[Math.floor(Math.random() * arr.length)];
-    }
+    // Dark mode toggle
+    darkModeToggle.addEventListener('change', () => {
+        if (darkModeToggle.checked) {
+            bodyEl.classList.add('dark-mode');
+        } else {
+            bodyEl.classList.remove('dark-mode');
+        }
+    });
 
     generateSentencesBtn.addEventListener('click', () => {
         const size = parseInt(testSuiteSizeInput.value, 10);
@@ -88,19 +94,58 @@ document.addEventListener('DOMContentLoaded', () => {
             testSentences.push(sentence);
         }
 
+        renderTestSentences();
+        startBenchmarkBtn.disabled = false;
+    });
+
+    function renderTestSentences() {
+        sentencesTableBody.innerHTML = '';
         testSentences.forEach((s, index) => {
             const row = document.createElement('tr');
             const idxCell = document.createElement('td');
             idxCell.textContent = index + 1;
+
             const sentenceCell = document.createElement('td');
             sentenceCell.textContent = s;
+
+            const editCell = document.createElement('td');
+            const editBtn = document.createElement('button');
+            editBtn.className = 'btn btn-sm btn-outline-secondary';
+            editBtn.innerHTML = `<i class="bi bi-pencil-square"></i>`;
+            editBtn.addEventListener('click', () => startEditSentence(row, index));
+            editCell.appendChild(editBtn);
+
             row.appendChild(idxCell);
             row.appendChild(sentenceCell);
+            row.appendChild(editCell);
             sentencesTableBody.appendChild(row);
         });
+    }
 
-        startBenchmarkBtn.disabled = false;
-    });
+    function startEditSentence(row, index) {
+        const sentenceCell = row.cells[1];
+        const originalText = sentenceCell.textContent;
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'form-control form-control-sm';
+        input.value = originalText;
+        sentenceCell.innerHTML = '';
+        sentenceCell.appendChild(input);
+        input.focus();
+
+        function finishEdit() {
+            const newVal = input.value.trim();
+            testSentences[index] = newVal;
+            sentenceCell.textContent = newVal;
+        }
+
+        input.addEventListener('blur', finishEdit);
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                finishEdit();
+            }
+        });
+    }
 
     startBenchmarkBtn.addEventListener('click', async () => {
         startBenchmarkBtn.disabled = true;
@@ -116,6 +161,12 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // Update LLM headers with model names
+        llm1Header.innerHTML = `<i class="bi bi-cpu me-2"></i>${llm1Model} Results`;
+        if (llm2Base && llm2Model) {
+            llm2Header.innerHTML = `<i class="bi bi-cpu me-2"></i>${llm2Model} Results`;
+        }
+
         resetLLMResults(1);
         resetLLMResults(2);
 
@@ -127,14 +178,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
         loggingEnabled = enableLoggingCheck.checked;
         logsCard.style.display = loggingEnabled ? 'block' : 'none';
-        logsContainer.textContent = '';
+        logsContainer.innerHTML = '';
 
         llm1Paused = false;
         llm2Paused = false;
+        llm1Stopped = false;
+        llm2Stopped = false;
+
         llm1PauseBtn.disabled = false;
         llm1ResumeBtn.disabled = true;
+        llm1StopBtn.disabled = false;
+
         llm2PauseBtn.disabled = false;
         llm2ResumeBtn.disabled = true;
+        llm2StopBtn.disabled = false;
 
         const startTime = performance.now();
 
@@ -163,6 +220,13 @@ document.addEventListener('DOMContentLoaded', () => {
         llm1ResumeBtn.disabled = true;
     });
 
+    llm1StopBtn.addEventListener('click', () => {
+        llm1Stopped = true;
+        llm1PauseBtn.disabled = true;
+        llm1ResumeBtn.disabled = true;
+        llm1StopBtn.disabled = true;
+    });
+
     llm2PauseBtn.addEventListener('click', () => {
         llm2Paused = true;
         llm2PauseBtn.disabled = true;
@@ -175,6 +239,13 @@ document.addEventListener('DOMContentLoaded', () => {
         llm2ResumeBtn.disabled = true;
     });
 
+    llm2StopBtn.addEventListener('click', () => {
+        llm2Stopped = true;
+        llm2PauseBtn.disabled = true;
+        llm2ResumeBtn.disabled = true;
+        llm2StopBtn.disabled = true;
+    });
+
     function resetLLMResults(llmNumber) {
         if (llmNumber === 1) {
             llm1SuccessCountElem.textContent = '0';
@@ -184,9 +255,6 @@ document.addEventListener('DOMContentLoaded', () => {
             llm1Results.innerHTML = '';
             llm1AvgTimeElem.textContent = '0 ms';
             llm1CurrentSection.style.display = 'none';
-            llm1CurrentSentenceElem.textContent = '';
-            llm1CurrentResponseElem.textContent = '';
-            llm1LastSection.style.display = 'none';
         } else {
             llm2SuccessCountElem.textContent = '0';
             llm2FailureCountElem.textContent = '0';
@@ -195,9 +263,6 @@ document.addEventListener('DOMContentLoaded', () => {
             llm2Results.innerHTML = '';
             llm2AvgTimeElem.textContent = '0 ms';
             llm2CurrentSection.style.display = 'none';
-            llm2CurrentSentenceElem.textContent = '';
-            llm2CurrentResponseElem.textContent = '';
-            llm2LastSection.style.display = 'none';
         }
     }
 
@@ -210,27 +275,29 @@ document.addEventListener('DOMContentLoaded', () => {
         const currentSection = isLLM1 ? llm1CurrentSection : llm2CurrentSection;
         const currentSentenceElem = isLLM1 ? llm1CurrentSentenceElem : llm2CurrentSentenceElem;
         const currentResponseElem = isLLM1 ? llm1CurrentResponseElem : llm2CurrentResponseElem;
-        const lastSection = isLLM1 ? llm1LastSection : llm2LastSection;
-        const lastSentenceElem = isLLM1 ? llm1LastSentenceElem : llm2LastSentenceElem;
-        const lastResponseElem = isLLM1 ? llm1LastResponseElem : llm2LastResponseElem;
-        const lastTimeElem = isLLM1 ? llm1LastTimeElem : llm2LastTimeElem;
-
         const successCountElem = isLLM1 ? llm1SuccessCountElem : llm2SuccessCountElem;
         const failureCountElem = isLLM1 ? llm1FailureCountElem : llm2FailureCountElem;
         const progressBar = isLLM1 ? llm1ProgressBar : llm2ProgressBar;
         const progressText = isLLM1 ? llm1ProgressText : llm2ProgressText;
         const resultsList = isLLM1 ? llm1Results : llm2Results;
         const avgTimeElem = isLLM1 ? llm1AvgTimeElem : llm2AvgTimeElem;
+
         const pauseVar = isLLM1 ? () => llm1Paused : () => llm2Paused;
+        const stopVar = isLLM1 ? () => llm1Stopped : () => llm2Stopped;
 
         for (let i = 0; i < sentences.length; i++) {
-            // Check if paused before starting next request
-            while (pauseVar()) {
+            if (stopVar()) {
+                break;
+            }
+
+            while (pauseVar() && !stopVar()) {
                 await sleep(100);
             }
 
+            if (stopVar()) break;
+
             const sentence = sentences[i];
-            highlightSentence(i, true); // highlight processing
+            highlightSentence(i, true);
             currentSection.style.display = 'block';
             currentSentenceElem.textContent = `"${sentence}"`;
             currentResponseElem.textContent = '...waiting for response';
@@ -257,7 +324,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const elapsed = end - start;
             totalResponseTime += elapsed;
 
-            // Log details if enabled
             if (loggingEnabled) {
                 const logEntry = {
                     llm: llmNumber,
@@ -266,40 +332,32 @@ document.addEventListener('DOMContentLoaded', () => {
                     response: data,
                     time_ms: elapsed.toFixed(2)
                 };
-                logsContainer.textContent += JSON.stringify(logEntry, null, 2) + "\n\n";
+                const entryDiv = document.createElement('div');
+                entryDiv.classList.add('log-entry');
+                entryDiv.textContent = JSON.stringify(logEntry, null, 2);
+                logsContainer.appendChild(entryDiv);
             }
 
             if (data.success) {
                 successCount++;
-                currentResponseElem.textContent = data.model_response || 'No response';
+                const respText = data.model_response && data.model_response.trim().length > 0 ? data.model_response : "No response";
+                currentResponseElem.textContent = respText;
 
                 highlightSentence(i, false, true);
                 const li = document.createElement('li');
                 li.classList.add('list-group-item');
                 li.innerHTML = `<strong>#${i+1}:</strong> Success | <em>${elapsed.toFixed(2)} ms</em>`;
                 resultsList.appendChild(li);
-
-                // Update last processed
-                lastSection.style.display = 'block';
-                lastSentenceElem.textContent = `"${sentence}"`;
-                lastResponseElem.textContent = data.model_response || 'No response';
-                lastTimeElem.textContent = `${elapsed.toFixed(2)} ms`;
-
             } else {
                 failureCount++;
-                currentResponseElem.textContent = `Error: ${data.error || 'Unknown'}`;
+                const errResp = `Error: ${data.error || 'Unknown'}`;
+                currentResponseElem.textContent = errResp;
 
                 highlightSentence(i, false, false);
                 const li = document.createElement('li');
                 li.classList.add('list-group-item', 'list-group-item-danger');
                 li.innerHTML = `<strong>#${i+1}:</strong> Failed | <em>${elapsed.toFixed(2)} ms</em>`;
                 resultsList.appendChild(li);
-
-                // Update last processed (even if failed)
-                lastSection.style.display = 'block';
-                lastSentenceElem.textContent = `"${sentence}"`;
-                lastResponseElem.textContent = `Error: ${data.error || 'Unknown'}`;
-                lastTimeElem.textContent = `${elapsed.toFixed(2)} ms`;
             }
 
             successCountElem.textContent = successCount;
@@ -307,13 +365,12 @@ document.addEventListener('DOMContentLoaded', () => {
             updateProgressBar(progressBar, progressText, (i+1), sentences.length);
             avgTimeElem.textContent = `${(totalResponseTime/(i+1)).toFixed(2)} ms`;
 
-            // Check if paused before next iteration
-            while (pauseVar()) {
+            while (pauseVar() && !stopVar()) {
                 await sleep(100);
             }
+            if (stopVar()) break;
         }
 
-        // All done, no current sentence
         currentSection.style.display = 'none';
     }
 
@@ -338,6 +395,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const percent = Math.round((processed / total) * 100);
         barElem.style.width = percent + '%';
         textElem.textContent = percent + '%';
+    }
+
+    function randomChoice(arr) {
+        return arr[Math.floor(Math.random() * arr.length)];
     }
 
     function sleep(ms) {

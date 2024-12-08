@@ -17,7 +17,7 @@ prompt = PromptTemplate(
         You are a master at understanding what a customer wants and utilize available tools only if you have to.
     <|eot_id|>
     <|start_header_id|>user<|end_header_id|>
-        Conduct a comprehensive analysis of the request provided. \n
+        Conduct a comprehensive analysis of the request provided.
         USER REQUEST:\n\n {initial_request} \n\n
     <|eot_id|>
     <|start_header_id|>assistant<|end_header_id|>
@@ -32,7 +32,6 @@ tool_mapping = {
 
 app = FastAPI()
 
-# Serve static files under /static
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/")
@@ -77,10 +76,16 @@ async def benchmark(req: BenchmarkRequest):
         })
 
     if not isinstance(result, AIMessage):
-        return {"success": False, "sentence": req.sentence, "error": "No valid AIMessage response from model."}
+        return {
+            "success": False,
+            "sentence": req.sentence,
+            "error": "No valid AIMessage response from model."
+        }
 
-    # Extract tool calls
+    model_response = result.content.strip() if result.content else ""
     tool_calls_data = []
+    success = True
+
     if hasattr(result, 'tool_calls') and result.tool_calls:
         for tc in result.tool_calls:
             tool_name = tc["name"]
@@ -89,14 +94,45 @@ async def benchmark(req: BenchmarkRequest):
                 tool_output = tool_mapping[tool_name].invoke(tool_args)
             except Exception as e:
                 tool_output = f"Tool execution error: {str(e)}"
+                success = False
+
+            # If tool output indicates an error, success = False
+            if "Tool execution error" in tool_output:
+                success = False
+
             tool_calls_data.append({
                 "name": tool_name,
                 "args": tool_args,
                 "output": tool_output
             })
-        model_response = result.content.strip() if result.content else ""
-    else:
-        model_response = result.content.strip() if result.content else ""
+
+    # Determine final success:
+    # Case 1: model_response is non-empty => success
+    # Case 2: If model_response is empty, but we have at least one tool call that succeeded (no error) and non-empty output => success
+    # Otherwise => failure
+
+    # Check if there's any successful tool output
+    successful_tool_output = any(
+        tc["output"] and "Tool execution error" not in tc["output"] 
+        for tc in tool_calls_data
+    )
+
+    # If model_response empty, rely on tool output
+    if model_response == "":
+        if not successful_tool_output:
+            success = False
+
+    # If already marked success=false due to errors, keep it false
+    # Otherwise success remains true
+
+    if not success:
+        return {
+            "success": False,
+            "sentence": req.sentence,
+            "tool_calls": tool_calls_data,
+            "model_response": model_response,
+            "error": "No successful response or tool execution."
+        }
 
     return {
         "success": True,

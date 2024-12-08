@@ -1,9 +1,59 @@
 .highlight-processing {
-    background-color: #fff3cd !important; /* a soft yellow to indicate processing */
+    background-color: #fff3cd !important; /* Soft yellow */
 }
 .highlight-completed-success {
     background-color: #d4edda !important; /* Light green */
 }
 .highlight-completed-failure {
     background-color: #f8d7da !important; /* Light red */
+}
+
+.dark-mode {
+    background-color: #121212 !important;
+    color: #e0e0e0 !important;
+}
+
+.dark-mode .navbar-dark.bg-dark {
+    background-color: #1f1f1f !important;
+}
+
+.dark-mode .card {
+    background-color: #1e1e1e !important;
+    color: #e0e0e0 !important;
+    border: 1px solid #333;
+}
+
+.dark-mode .card-header {
+    background-color: #2c2c2c !important;
+    border-bottom: 1px solid #444 !important;
+}
+
+.dark-mode .table-hover tbody tr:hover {
+    background-color: #2a2a2a !important;
+}
+
+.dark-mode .table-light {
+    background-color: #333 !important;
+    color: #e0e0e0 !important;
+}
+
+.dark-mode .alert-info {
+    background-color: #2b3e50 !important;
+    color: #e0e0e0 !important;
+}
+
+.dark-mode .text-muted {
+    color: #ccc !important;
+}
+
+.log-entry {
+    border-bottom: 1px solid #ccc;
+    padding: 5px 0;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    margin-bottom: 10px;
+}
+
+.dark-mode .log-entry {
+    border-bottom: 1px solid #555;
 }
