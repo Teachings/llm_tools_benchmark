@@ -48,6 +48,7 @@ class BenchmarkRequest(BaseModel):
     base_url: str
     model_name: str
     sentence: str
+    expected_tool: str = None  # New parameter added
 
 @app.post("/benchmark")
 async def benchmark(req: BenchmarkRequest):
@@ -63,13 +64,7 @@ async def benchmark(req: BenchmarkRequest):
             format="json"
         )
     except Exception as e:
-        end_time = time.time()
-        return JSONResponse(status_code=500, content={
-            "success": False,
-            "sentence": req.sentence,
-            "error": f"Failed to initialize model: {str(e)}",
-            "time_taken": int((end_time - start_time)*1000)
-        })
+        return build_response(success=False, req=req, error=f"Failed to initialize model: {str(e)}", start_time=start_time)
 
     model_with_tools = model.bind_tools(
         tools=[get_current_weather, get_system_time],
@@ -79,22 +74,10 @@ async def benchmark(req: BenchmarkRequest):
     try:
         result = agent_request_generator.invoke({"initial_request": req.sentence})
     except Exception as e:
-        end_time = time.time()
-        return JSONResponse(status_code=500, content={
-            "success": False,
-            "sentence": req.sentence,
-            "error": f"Model invocation failed: {str(e)}",
-            "time_taken": int((end_time - start_time)*1000)
-        })
+        return build_response(success=False, req=req, error=f"Model invocation failed: {str(e)}", start_time=start_time)
 
     if not isinstance(result, AIMessage):
-        end_time = time.time()
-        return {
-            "success": False,
-            "sentence": req.sentence,
-            "error": "No valid AIMessage response from model.",
-            "time_taken": int((end_time - start_time)*1000)
-        }
+        return build_response(success=False, req=req, error="No valid AIMessage response from model.", start_time=start_time)
 
     model_response = result.content.strip() if result.content else ""
     tool_calls_data = []
@@ -102,10 +85,32 @@ async def benchmark(req: BenchmarkRequest):
 
     if hasattr(result, 'tool_calls') and result.tool_calls:
         for tc in result.tool_calls:
-            tool_name = tc["name"]
-            tool_args = tc["args"]
+            tool_name = tc.get("name", "")
+
+            # Strict success criteria based on expected_tool before execution
+            if req.expected_tool:
+                if req.expected_tool == "none":
+                    # If no tools should be called, success should remain true for empty tool names
+                    if tool_name:
+                        success = False
+                        tool_calls_data.append({
+                            "name": tool_name,
+                            "args": tc.get("args", {}),
+                            "output": "Tool execution error :: Tool call was not required, tool execution skipped."
+                        })
+                        break
+                elif req.expected_tool != tool_name:
+                    # If the wrong tool is being called, fail immediately
+                    success = False
+                    tool_calls_data.append({
+                        "name": tool_name,
+                        "args": tc.get("args", {}),
+                        "output": "Tool execution error :: Wrong tool called, tool execution skipped."
+                    })
+                    break
+
             try:
-                tool_output = tool_mapping[tool_name].invoke(tool_args)
+                tool_output = tool_mapping[tool_name].invoke(tc.get("args", {})) if tool_name else ""
             except Exception as e:
                 tool_output = f"Tool execution error: {str(e)}"
                 success = False
@@ -113,9 +118,13 @@ async def benchmark(req: BenchmarkRequest):
                 success = False
             tool_calls_data.append({
                 "name": tool_name,
-                "args": tool_args,
+                "args": tc.get("args", {}),
                 "output": tool_output
             })
+
+    # Adjust success criteria for expected_tool == "none"
+    if req.expected_tool == "none" and all(not tc.get("name", "") for tc in result.tool_calls):
+        success = True
 
     # Determine final success
     successful_tool_output = any(
@@ -123,29 +132,23 @@ async def benchmark(req: BenchmarkRequest):
         for tc in tool_calls_data
     )
 
-    if model_response == "":
-        if not successful_tool_output:
-            success = False
+    if model_response == "" and not successful_tool_output and req.expected_tool != "none":
+        success = False
 
-    if not success:
-        end_time = time.time()
-        return {
-            "success": False,
-            "sentence": req.sentence,
-            "tool_calls": tool_calls_data,
-            "model_response": model_response,
-            "error": "No successful response or tool execution.",
-            "time_taken": int((end_time - start_time)*1000)
-        }
+    return build_response(success=success, req=req, model_response=model_response, tool_calls_data=tool_calls_data, start_time=start_time)
 
+def build_response(success: bool, req: BenchmarkRequest, error: str = None, model_response: str = "", tool_calls_data: list = None, start_time: float = None):
     end_time = time.time()
-    return {
-        "success": True,
+    response = {
+        "success": success,
         "sentence": req.sentence,
-        "tool_calls": tool_calls_data,
+        "tool_calls": tool_calls_data or [],
         "model_response": model_response,
-        "time_taken": int((end_time - start_time)*1000) # Return time in ms
+        "time_taken": int((end_time - start_time) * 1000) if start_time else 0
     }
+    if error:
+        response["error"] = error
+    return JSONResponse(status_code=200 if success else 500, content=response)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8090)

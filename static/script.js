@@ -45,7 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const logsCard = document.getElementById('logsCard');
     const logsContainer = document.getElementById('logsContainer');
 
-    // Create a button in logsCard header to clear logs
+    // Add Clear Logs button
     const logsCardHeader = logsCard.querySelector('.card-header');
     const clearLogsBtn = document.createElement('button');
     clearLogsBtn.className = 'btn btn-sm btn-outline-secondary ms-3';
@@ -55,14 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     logsCardHeader.appendChild(clearLogsBtn);
 
-    let testSentences = [];
-    let loggingEnabled = false;
-
-    let llm1Paused = false;
-    let llm2Paused = false;
-    let llm1Stopped = false;
-    let llm2Stopped = false;
-
+    // Updated test requests logic
     const citiesAndStates = [
         "New York, NY", "Los Angeles, CA", "Chicago, IL", "Houston, TX",
         "Miami, FL", "San Francisco, CA", "Seattle, WA", "Boston, MA",
@@ -70,7 +63,8 @@ document.addEventListener('DOMContentLoaded', () => {
         "Dallas, TX", "San Diego, CA", "Atlanta, GA", "Washington D.C., DC",
         "Orlando, FL", "Nashville, TN", "Minneapolis, MN", "Las Vegas, NV"
     ];
-    const specificRequests = [
+
+    const weatherRequests = [
         "What is the weather today in [location]?",
         "Can you tell me the forecast for tomorrow in [location]?",
         "How's the weather in [location] today?",
@@ -78,6 +72,22 @@ document.addEventListener('DOMContentLoaded', () => {
         "Tell me about the conditions for tonight in [location]?",
         "Is it going to rain tomorrow in [location]?"
     ];
+
+    // No-tool requests (expected_tool = none)
+    const noToolRequests = [
+        "Tell me a joke.",
+        "What is 2+2?",
+        "Describe a beautiful sunset.",
+        "Give me a fun fact about penguins."
+    ];
+
+    let testSentences = []; // {sentence: string, expected_tool: string}
+    let loggingEnabled = false;
+
+    let llm1Paused = false;
+    let llm2Paused = false;
+    let llm1Stopped = false;
+    let llm2Stopped = false;
 
     darkModeToggle.addEventListener('change', () => {
         if (darkModeToggle.checked) {
@@ -96,11 +106,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
         testSentences = [];
         sentencesTableBody.innerHTML = '';
+        
         for (let i = 0; i < size; i++) {
-            const sentenceTemplate = specificRequests[Math.floor(Math.random() * specificRequests.length)];
-            const location = citiesAndStates[Math.floor(Math.random() * citiesAndStates.length)];
-            const sentence = sentenceTemplate.replace("[location]", location);
-            testSentences.push(sentence);
+            // 25% chance to pick from noToolRequests
+            const useNoTool = Math.random() < 0.25;
+            if (useNoTool) {
+                const sentenceTemplate = noToolRequests[Math.floor(Math.random() * noToolRequests.length)];
+                testSentences.push({
+                    sentence: sentenceTemplate,
+                    expected_tool: "none"
+                });
+            } else {
+                const sentenceTemplate = weatherRequests[Math.floor(Math.random() * weatherRequests.length)];
+                const location = citiesAndStates[Math.floor(Math.random() * citiesAndStates.length)];
+                const sentence = sentenceTemplate.replace("[location]", location);
+                testSentences.push({
+                    sentence: sentence,
+                    expected_tool: "get_current_weather"
+                });
+            }
         }
 
         renderTestSentences();
@@ -109,24 +133,52 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderTestSentences() {
         sentencesTableBody.innerHTML = '';
-        testSentences.forEach((s, index) => {
+
+        testSentences.forEach((item, index) => {
             const row = document.createElement('tr');
+
+            // Index
             const idxCell = document.createElement('td');
             idxCell.textContent = index + 1;
 
+            // Sentence cell (editable)
             const sentenceCell = document.createElement('td');
-            sentenceCell.textContent = s;
+            sentenceCell.textContent = item.sentence;
 
-            const editCell = document.createElement('td');
-            const editBtn = document.createElement('button');
-            editBtn.className = 'btn btn-sm btn-outline-secondary';
-            editBtn.innerHTML = `<i class="bi bi-pencil-square"></i>`;
-            editBtn.addEventListener('click', () => startEditSentence(row, index));
-            editCell.appendChild(editBtn);
+            // Edit sentence button cell
+            const editSentenceCell = document.createElement('td');
+            const editSentenceBtn = document.createElement('button');
+            editSentenceBtn.className = 'btn btn-sm btn-outline-secondary';
+            editSentenceBtn.innerHTML = `<i class="bi bi-pencil-square"></i>`;
+            editSentenceBtn.addEventListener('click', () => startEditSentence(row, index));
+            editSentenceCell.appendChild(editSentenceBtn);
+
+            // Expected Tool cell (dropdown)
+            const expectedToolCell = document.createElement('td');
+            const select = document.createElement('select');
+            select.className = 'form-select form-select-sm';
+            // Two options: none or get_current_weather
+            const optionNone = document.createElement('option');
+            optionNone.value = 'none';
+            optionNone.textContent = 'none';
+            const optionWeather = document.createElement('option');
+            optionWeather.value = 'get_current_weather';
+            optionWeather.textContent = 'get_current_weather';
+
+            select.appendChild(optionNone);
+            select.appendChild(optionWeather);
+            select.value = item.expected_tool;
+
+            select.addEventListener('change', () => {
+                testSentences[index].expected_tool = select.value;
+            });
+
+            expectedToolCell.appendChild(select);
 
             row.appendChild(idxCell);
             row.appendChild(sentenceCell);
-            row.appendChild(editCell);
+            row.appendChild(editSentenceCell);
+            row.appendChild(expectedToolCell);
             sentencesTableBody.appendChild(row);
         });
     }
@@ -144,7 +196,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         function finishEdit() {
             const newVal = input.value.trim();
-            testSentences[index] = newVal;
+            testSentences[index].sentence = newVal;
             sentenceCell.textContent = newVal;
         }
 
@@ -217,7 +269,7 @@ document.addEventListener('DOMContentLoaded', () => {
         totalTimeElem.textContent = `${totalTime.toFixed(2)} ms`;
         console.log(`[${Date.now()}] All benchmarks completed. Total time: ${totalTime.toFixed(2)} ms`);
 
-        // Re-enable the Start Benchmarking button so user can edit and rerun
+        // Allow rerun
         startBenchmarkBtn.disabled = false;
     });
 
@@ -300,8 +352,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 break;
             }
 
-            const sentence = sentences[i];
-            console.log(`[${Date.now()}] LLM${llmNumber} starting sentence #${i+1}: "${sentence}"`);
+            const {sentence, expected_tool} = sentences[i];
+            console.log(`[${Date.now()}] LLM${llmNumber} starting sentence #${i+1}: "${sentence}" (expected_tool: ${expected_tool})`);
 
             highlightSentence(i, true);
             currentSection.style.display = 'block';
@@ -311,7 +363,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const payload = {
                 base_url: baseURL,
                 model_name: modelName,
-                sentence: sentence
+                sentence: sentence,
+                expected_tool: expected_tool
             };
 
             let data;
