@@ -45,6 +45,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const logsCard = document.getElementById('logsCard');
     const logsContainer = document.getElementById('logsContainer');
 
+    // Create a button in logsCard header to clear logs
+    const logsCardHeader = logsCard.querySelector('.card-header');
+    const clearLogsBtn = document.createElement('button');
+    clearLogsBtn.className = 'btn btn-sm btn-outline-secondary ms-3';
+    clearLogsBtn.textContent = 'Clear Logs';
+    clearLogsBtn.addEventListener('click', () => {
+        logsContainer.innerHTML = '';
+    });
+    logsCardHeader.appendChild(clearLogsBtn);
+
     let testSentences = [];
     let loggingEnabled = false;
 
@@ -206,6 +216,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const totalTime = endTime - startTime;
         totalTimeElem.textContent = `${totalTime.toFixed(2)} ms`;
         console.log(`[${Date.now()}] All benchmarks completed. Total time: ${totalTime.toFixed(2)} ms`);
+
+        // Re-enable the Start Benchmarking button so user can edit and rerun
+        startBenchmarkBtn.disabled = false;
     });
 
     llm1PauseBtn.addEventListener('click', () => {
@@ -313,7 +326,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 data = { success: false, sentence, error: err.message };
             }
 
-            // Use backend's time_taken for elapsed time
             let elapsed = data.time_taken !== undefined ? data.time_taken : 0;
             totalResponseTime += elapsed;
 
