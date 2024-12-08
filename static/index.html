@@ -6,19 +6,20 @@
 <title>LLM Benchmark</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
 <link rel="stylesheet" href="/static/style.css" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
 </head>
 <body class="bg-light">
 
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-3">
   <div class="container-fluid">
-    <span class="navbar-brand mb-0 h1">LLM Benchmark Suite</span>
+    <span class="navbar-brand mb-0 h1"><i class="bi bi-speedometer2 me-2"></i>LLM Benchmark Suite</span>
   </div>
 </nav>
 
-<div class="container py-4">
+<div class="container py-3">
 
     <!-- Configuration Card -->
-    <div class="card mb-4">
+    <div class="card mb-4 shadow-sm">
         <div class="card-header">
             <h5 class="mb-0">Configuration</h5>
         </div>
@@ -44,24 +45,32 @@
                     <label class="form-label">Test Suite Size</label>
                     <input type="number" class="form-control" id="testSuiteSize" placeholder="10" min="1" />
                 </div>
-                <div class="col-md-3 d-flex align-items-end mt-3">
-                    <button type="button" class="btn btn-primary w-100" id="generateSentencesBtn">Generate Test Sentences</button>
+                <div class="col-md-3 mt-3 d-flex align-items-end">
+                    <button type="button" class="btn btn-primary w-100" id="generateSentencesBtn"><i class="bi bi-wrench-adjustable me-1"></i>Generate</button>
                 </div>
-                <div class="col-md-3 d-flex align-items-end mt-3">
-                    <button type="button" class="btn btn-success w-100" id="startBenchmarkBtn" disabled>Start Benchmarking</button>
+                <div class="col-md-3 mt-3 d-flex align-items-end">
+                    <button type="button" class="btn btn-success w-100" id="startBenchmarkBtn" disabled><i class="bi bi-play-fill me-1"></i>Start Benchmarking</button>
+                </div>
+                <div class="col-md-3 mt-3 d-flex align-items-center">
+                    <div class="form-check ms-2">
+                        <input class="form-check-input" type="checkbox" value="" id="enableLogging" />
+                        <label class="form-check-label" for="enableLogging">
+                            Enable Detailed Logging
+                        </label>
+                    </div>
                 </div>
             </form>
         </div>
     </div>
 
     <!-- Generated Sentences Card -->
-    <div class="card mb-4">
+    <div class="card mb-4 shadow-sm">
         <div class="card-header">
-            <h5 class="mb-0">Generated Test Sentences</h5>
+            <h5 class="mb-0"><i class="bi bi-card-text me-2"></i>Generated Test Sentences</h5>
         </div>
         <div class="card-body p-0" style="height: 200px; overflow-y: auto;">
             <table class="table table-hover mb-0" id="sentencesTable">
-                <thead class="table-light" style="position: sticky; top:0;">
+                <thead class="table-light" style="position: sticky; top:0; z-index:10;">
                     <tr>
                         <th>#</th>
                         <th>Test Sentence</th>
@@ -76,9 +85,13 @@
     <div class="row g-4 mb-4" id="resultsSection">
         <!-- LLM 1 Results -->
         <div class="col-md-6" id="llm1CardContainer">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">LLM 1 Results</h5>
+            <div class="card shadow-sm">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-cpu me-2"></i>LLM 1 Results</h5>
+                    <div>
+                        <button class="btn btn-sm btn-outline-secondary me-2" id="llm1PauseBtn"><i class="bi bi-pause-fill"></i> Pause</button>
+                        <button class="btn btn-sm btn-outline-secondary" id="llm1ResumeBtn" disabled><i class="bi bi-play-fill"></i> Resume</button>
+                    </div>
                 </div>
                 <div class="card-body">
                     <div class="mb-2 d-flex align-items-center">
@@ -88,22 +101,32 @@
                     <div class="progress mb-3">
                         <div class="progress-bar" id="llm1ProgressBar" role="progressbar" style="width: 0%;"></div>
                     </div>
-                    <div class="mb-3">
+                    <div class="mb-3 small text-muted">
                         <strong>Successes:</strong> <span id="llm1SuccessCount">0</span> 
                         | <strong>Failures:</strong> <span id="llm1FailureCount">0</span> 
                         | <strong>Avg. Time:</strong> <span id="llm1AvgTime">0 ms</span>
                     </div>
                     
-                    <!-- Current processing sentence -->
-                    <div class="alert alert-info p-2" style="display:none;" id="llm1CurrentSection">
-                        <div><strong>Processing Sentence:</strong> <span id="llm1CurrentSentence"></span></div>
-                        <div><strong>Last Response:</strong> <span id="llm1CurrentResponse"></span></div>
+                    <!-- Current & Last processed -->
+                    <div class="mb-3">
+                        <h6 class="fw-bold">Current Processing</h6>
+                        <div class="alert alert-info p-2 mb-3" style="display:none;" id="llm1CurrentSection">
+                            <div class="small"><strong>Sentence:</strong> <span id="llm1CurrentSentence"></span></div>
+                            <div class="small"><strong>Response:</strong> <span id="llm1CurrentResponse"></span></div>
+                        </div>
+                        
+                        <h6 class="fw-bold">Last Processed</h6>
+                        <div class="alert alert-secondary p-2" style="display:none;" id="llm1LastSection">
+                            <div class="small"><strong>Sentence:</strong> <span id="llm1LastSentence"></span></div>
+                            <div class="small"><strong>Response:</strong> <span id="llm1LastResponse"></span></div>
+                            <div class="small text-end text-muted"><em>Time: <span id="llm1LastTime"></span></em></div>
+                        </div>
                     </div>
 
                     <!-- Completed sentences list -->
-                    <h6>Completed Sentences</h6>
+                    <h6 class="fw-bold">Completed Sentences</h6>
                     <div class="rounded border" style="height:150px; overflow-y:auto;" id="llm1CompletedContainer">
-                        <ul class="list-group list-group-flush" id="llm1Results"></ul>
+                        <ul class="list-group list-group-flush small" id="llm1Results"></ul>
                     </div>
                 </div>
             </div>
@@ -111,9 +134,13 @@
 
         <!-- LLM 2 Results -->
         <div class="col-md-6" id="llm2CardContainer" style="display:none;">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">LLM 2 Results</h5>
+            <div class="card shadow-sm">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-cpu me-2"></i>LLM 2 Results</h5>
+                    <div>
+                        <button class="btn btn-sm btn-outline-secondary me-2" id="llm2PauseBtn"><i class="bi bi-pause-fill"></i> Pause</button>
+                        <button class="btn btn-sm btn-outline-secondary" id="llm2ResumeBtn" disabled><i class="bi bi-play-fill"></i> Resume</button>
+                    </div>
                 </div>
                 <div class="card-body">
                     <div class="mb-2 d-flex align-items-center">
@@ -123,22 +150,32 @@
                     <div class="progress mb-3">
                         <div class="progress-bar" id="llm2ProgressBar" role="progressbar" style="width: 0%;"></div>
                     </div>
-                    <div class="mb-3">
+                    <div class="mb-3 small text-muted">
                         <strong>Successes:</strong> <span id="llm2SuccessCount">0</span> 
                         | <strong>Failures:</strong> <span id="llm2FailureCount">0</span> 
                         | <strong>Avg. Time:</strong> <span id="llm2AvgTime">0 ms</span>
                     </div>
 
-                    <!-- Current processing sentence -->
-                    <div class="alert alert-info p-2" style="display:none;" id="llm2CurrentSection">
-                        <div><strong>Processing Sentence:</strong> <span id="llm2CurrentSentence"></span></div>
-                        <div><strong>Last Response:</strong> <span id="llm2CurrentResponse"></span></div>
+                    <!-- Current & Last processed -->
+                    <div class="mb-3">
+                        <h6 class="fw-bold">Current Processing</h6>
+                        <div class="alert alert-info p-2 mb-3" style="display:none;" id="llm2CurrentSection">
+                            <div class="small"><strong>Sentence:</strong> <span id="llm2CurrentSentence"></span></div>
+                            <div class="small"><strong>Response:</strong> <span id="llm2CurrentResponse"></span></div>
+                        </div>
+
+                        <h6 class="fw-bold">Last Processed</h6>
+                        <div class="alert alert-secondary p-2" style="display:none;" id="llm2LastSection">
+                            <div class="small"><strong>Sentence:</strong> <span id="llm2LastSentence"></span></div>
+                            <div class="small"><strong>Response:</strong> <span id="llm2LastResponse"></span></div>
+                            <div class="small text-end text-muted"><em>Time: <span id="llm2LastTime"></span></em></div>
+                        </div>
                     </div>
 
                     <!-- Completed sentences list -->
-                    <h6>Completed Sentences</h6>
+                    <h6 class="fw-bold">Completed Sentences</h6>
                     <div class="rounded border" style="height:150px; overflow-y:auto;" id="llm2CompletedContainer">
-                        <ul class="list-group list-group-flush" id="llm2Results"></ul>
+                        <ul class="list-group list-group-flush small" id="llm2Results"></ul>
                     </div>
                 </div>
             </div>
@@ -146,14 +183,26 @@
     </div>
 
     <!-- Overall Statistics -->
-    <div class="card mb-4" id="summaryCard">
+    <div class="card mb-4 shadow-sm" id="summaryCard">
         <div class="card-header">
-            <h5 class="mb-0">Overall Statistics</h5>
+            <h5 class="mb-0"><i class="bi bi-bar-chart-line-fill me-2"></i>Overall Statistics</h5>
         </div>
         <div class="card-body">
-            <div><strong>Total Time Taken:</strong> <span id="totalTime">0 ms</span></div>
+            <div class="small"><strong>Total Time Taken:</strong> <span id="totalTime">0 ms</span></div>
         </div>
     </div>
+
+    <!-- Detailed Logs (shown only if enabled) -->
+    <div class="card mb-4 shadow-sm" id="logsCard" style="display:none;">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="bi bi-clipboard-data me-2"></i>Detailed Logs</h5>
+            <small class="text-muted">Scroll to view all details</small>
+        </div>
+        <div class="card-body" style="height: 300px; overflow-y:auto;">
+            <pre id="logsContainer" class="small text-wrap"></pre>
+        </div>
+    </div>
+
 </div>
 
 <script src="/static/script.js"></script>

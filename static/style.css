@@ -1,8 +1,8 @@
 .highlight-processing {
-    background-color: #fffae6 !important; /* Light yellow */
+    background-color: #fff3cd !important; /* a soft yellow to indicate processing */
 }
 .highlight-completed-success {
-    background-color: #d4edda !important; /* Light green from bootstrap alerts */
+    background-color: #d4edda !important; /* Light green */
 }
 .highlight-completed-failure {
     background-color: #f8d7da !important; /* Light red */
