@@ -1,7 +1,3 @@
-Here’s the updated README with **Docker** and **non-Docker** instructions for starting the application:
-
----
-
 # LLM Benchmark Suite
 
 The **LLM Benchmark Suite** is a versatile application designed to test and compare the performance and functionality of Large Language Models (LLMs) using various test scenarios. The suite supports evaluating tool-calling capabilities, analyzing response times, and benchmarking multiple LLMs simultaneously.
