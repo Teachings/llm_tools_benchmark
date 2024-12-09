@@ -33,6 +33,10 @@
                 </div>
                 <div class="card-body">
                     <form id="configForm" class="row g-3">
+                        <!-- LLM 1 Configuration -->
+                        <div class="col-12">
+                            <h6 class="fw-bold">LLM 1 Configuration</h6>
+                        </div>
                         <div class="col-md-6">
                             <label class="form-label">LLM 1 Base URL</label>
                             <input type="text" class="form-control" id="llm1BaseURL" placeholder="http://localhost:11435" />
@@ -41,39 +45,58 @@
                             <label class="form-label">LLM 1 Model Name</label>
                             <input type="text" class="form-control" id="llm1ModelName" placeholder="llama3.3:latest" />
                         </div>
+
+                        <!-- LLM 2 Configuration -->
+                        <div class="col-12 mt-3">
+                            <h6 class="fw-bold">LLM 2 Configuration (Optional)</h6>
+                        </div>
                         <div class="col-md-6">
-                            <label class="form-label">LLM 2 Base URL (Optional)</label>
+                            <label class="form-label">LLM 2 Base URL</label>
                             <input type="text" class="form-control" id="llm2BaseURL" placeholder="http://localhost:11436" />
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">LLM 2 Model Name (Optional)</label>
+                            <label class="form-label">LLM 2 Model Name</label>
                             <input type="text" class="form-control" id="llm2ModelName" placeholder="llama3.3:latest" />
                         </div>
-                        <div class="col-md-6 mt-3">
+
+                        <!-- Benchmark Settings -->
+                        <div class="col-12 mt-3">
+                            <h6 class="fw-bold">Benchmark Settings</h6>
+                        </div>
+                        <div class="col-md-4">
                             <label class="form-label">Test Suite Size</label>
                             <input type="number" class="form-control" id="testSuiteSize" placeholder="10" min="1" />
                         </div>
-                        <div class="col-md-6 mt-3 d-flex align-items-end">
-                            <div class="form-check ms-2">
+                        <div class="col-md-4">
+                            <label class="form-label">No-tool Probability (0-1)</label>
+                            <input type="number" step="0.05" min="0" max="1" class="form-control" id="noToolProbability" placeholder="0.25" />
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <div class="form-check ms-1 mb-2">
                                 <input class="form-check-input" type="checkbox" value="" id="enableLogging" />
-                                <label class="form-check-label" for="enableLogging">
+                                <label class="form-check-label ms-1" for="enableLogging">
                                     Enable Detailed Logging
                                 </label>
                             </div>
                         </div>
 
+                        <!-- Actions -->
                         <div class="col-md-6 mt-3 d-flex align-items-end">
-                            <button type="button" class="btn btn-primary w-100" id="generateSentencesBtn"><i class="bi bi-wrench-adjustable me-1"></i>Generate</button>
+                            <button type="button" class="btn btn-primary w-100" id="generateSentencesBtn">
+                                <i class="bi bi-wrench-adjustable me-1"></i>Generate
+                            </button>
                         </div>
                         <div class="col-md-6 mt-3 d-flex align-items-end">
-                            <button type="button" class="btn btn-success w-100" id="startBenchmarkBtn" disabled><i class="bi bi-play-fill me-1"></i>Start Benchmarking</button>
+                            <button type="button" class="btn btn-success w-100" id="startBenchmarkBtn" disabled>
+                                <i class="bi bi-play-fill me-1"></i>Start Benchmarking
+                            </button>
                         </div>
                     </form>
                 </div>
             </div>
         </div>
 
-        <!-- Function Calling Testbed Card (Previously Generated Sentences) -->
+        <!-- Function Calling Testbed -->
         <div class="col-md-6">
             <div class="card mb-4 shadow-sm h-100">
                 <div class="card-header">
@@ -86,13 +109,14 @@
                                 <th>#</th>
                                 <th>Test Sentence</th>
                                 <th>Edit</th>
+                                <th>Expected Tool Call</th>
                             </tr>
                         </thead>
                         <tbody></tbody>
                     </table>
                 </div>
                 <div class="card-footer text-muted small">
-                    Click the pencil icon to edit a test sentence.
+                    Click the pencil icon to edit a test sentence or change the expected tool call.
                 </div>
             </div>
         </div>
@@ -125,14 +149,12 @@
                         | <strong>Avg. Time:</strong> <span id="llm1AvgTime">0 ms</span>
                     </div>
                     
-                    <!-- Current Processing Only -->
                     <h6 class="fw-bold">Current Processing</h6>
                     <div class="alert alert-info p-2 mb-3" style="display:none;" id="llm1CurrentSection">
                         <div class="small"><strong>Sentence:</strong> <span id="llm1CurrentSentence"></span></div>
                         <div class="small"><strong>Response:</strong> <span id="llm1CurrentResponse"></span></div>
                     </div>
                     
-                    <!-- Completed sentences list -->
                     <h6 class="fw-bold">Completed Sentences</h6>
                     <div class="rounded border" style="height:150px; overflow-y:auto;" id="llm1CompletedContainer">
                         <ul class="list-group list-group-flush small" id="llm1Results"></ul>
@@ -166,14 +188,12 @@
                         | <strong>Avg. Time:</strong> <span id="llm2AvgTime">0 ms</span>
                     </div>
 
-                    <!-- Current Processing Only -->
                     <h6 class="fw-bold">Current Processing</h6>
                     <div class="alert alert-info p-2 mb-3" style="display:none;" id="llm2CurrentSection">
                         <div class="small"><strong>Sentence:</strong> <span id="llm2CurrentSentence"></span></div>
                         <div class="small"><strong>Response:</strong> <span id="llm2CurrentResponse"></span></div>
                     </div>
 
-                    <!-- Completed sentences list -->
                     <h6 class="fw-bold">Completed Sentences</h6>
                     <div class="rounded border" style="height:150px; overflow-y:auto;" id="llm2CompletedContainer">
                         <ul class="list-group list-group-flush small" id="llm2Results"></ul>
@@ -189,15 +209,24 @@
             <h5 class="mb-0"><i class="bi bi-bar-chart-line-fill me-2"></i>Overall Statistics</h5>
         </div>
         <div class="card-body">
-            <div class="small"><strong>Total Time Taken:</strong> <span id="totalTime">0 ms</span></div>
+            <div class="small mb-3"><strong>Total Time Taken:</strong> <span id="totalTime">0 ms</span></div>
+            <div class="detailed-stats mt-3">
+                <!-- Detailed stats will be appended here -->
+            </div>
         </div>
     </div>
 
-    <!-- Detailed Logs (shown only if enabled) -->
+    <!-- Detailed Logs -->
     <div class="card mb-4 shadow-sm" id="logsCard" style="display:none;">
         <div class="card-header d-flex justify-content-between align-items-center">
             <h5 class="mb-0"><i class="bi bi-clipboard-data me-2"></i>Detailed Logs</h5>
-            <small class="text-muted">Scroll to view all details</small>
+            <div class="d-flex align-items-center">
+                <button class="btn btn-sm btn-outline-secondary ms-3">Clear Logs</button>
+                <div class="form-check form-switch ms-3">
+                  <input class="form-check-input" type="checkbox" id="showOnlyFailedLogs">
+                  <label class="form-check-label ms-2" for="showOnlyFailedLogs">Show Only Failed Logs</label>
+                </div>
+            </div>
         </div>
         <div class="card-body" style="height: 300px; overflow-y:auto;" id="logsContainer">
             <!-- Log entries will appear here -->

@@ -7,10 +7,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const llm2BaseURLInput = document.getElementById('llm2BaseURL');
     const llm2ModelNameInput = document.getElementById('llm2ModelName');
     const testSuiteSizeInput = document.getElementById('testSuiteSize');
+    const noToolProbabilityInput = document.getElementById('noToolProbability');
     const generateSentencesBtn = document.getElementById('generateSentencesBtn');
     const startBenchmarkBtn = document.getElementById('startBenchmarkBtn');
     const enableLoggingCheck = document.getElementById('enableLogging');
     const sentencesTableBody = document.querySelector('#sentencesTable tbody');
+    const totalTimeElem = document.getElementById('totalTime');
+    const logsCard = document.getElementById('logsCard');
+    const logsColumnLLM1 = document.getElementById('logsColumnLLM1');
+    const logsColumnLLM2 = document.getElementById('logsColumnLLM2');
+    const logsContainerLLM1 = document.getElementById('logsContainerLLM1');
+    const logsContainerLLM2 = document.getElementById('logsContainerLLM2');
+    const showOnlyFailedLogsCheck = document.getElementById('showOnlyFailedLogs');
 
     const llm1Header = document.getElementById('llm1Header');
     const llm1ProgressText = document.getElementById('llm1ProgressText');
@@ -41,21 +49,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const llm2ResumeBtn = document.getElementById('llm2ResumeBtn');
     const llm2StopBtn = document.getElementById('llm2StopBtn');
 
-    const totalTimeElem = document.getElementById('totalTime');
-    const logsCard = document.getElementById('logsCard');
-    const logsContainer = document.getElementById('logsContainer');
+    const summaryCard = document.getElementById('summaryCard');
 
-    // Add Clear Logs button
-    const logsCardHeader = logsCard.querySelector('.card-header');
-    const clearLogsBtn = document.createElement('button');
-    clearLogsBtn.className = 'btn btn-sm btn-outline-secondary ms-3';
-    clearLogsBtn.textContent = 'Clear Logs';
-    clearLogsBtn.addEventListener('click', () => {
-        logsContainer.innerHTML = '';
-    });
-    logsCardHeader.appendChild(clearLogsBtn);
+    let testSentences = [];
+    let loggingEnabled = false;
 
-    // Updated test requests logic
+    let llm1Paused = false;
+    let llm2Paused = false;
+    let llm1Stopped = false;
+    let llm2Stopped = false;
+
     const citiesAndStates = [
         "New York, NY", "Los Angeles, CA", "Chicago, IL", "Houston, TX",
         "Miami, FL", "San Francisco, CA", "Seattle, WA", "Boston, MA",
@@ -73,7 +76,6 @@ document.addEventListener('DOMContentLoaded', () => {
         "Is it going to rain tomorrow in [location]?"
     ];
 
-    // No-tool requests (expected_tool = none)
     const noToolRequests = [
         "Tell me a joke.",
         "What is 2+2?",
@@ -81,20 +83,11 @@ document.addEventListener('DOMContentLoaded', () => {
         "Give me a fun fact about penguins."
     ];
 
-    let testSentences = []; // {sentence: string, expected_tool: string}
-    let loggingEnabled = false;
-
-    let llm1Paused = false;
-    let llm2Paused = false;
-    let llm1Stopped = false;
-    let llm2Stopped = false;
+    let llm1ModelGlobal = "";
+    let llm2ModelGlobal = "";
 
     darkModeToggle.addEventListener('change', () => {
-        if (darkModeToggle.checked) {
-            bodyEl.classList.add('dark-mode');
-        } else {
-            bodyEl.classList.remove('dark-mode');
-        }
+        bodyEl.classList.toggle('dark-mode', darkModeToggle.checked);
     });
 
     generateSentencesBtn.addEventListener('click', () => {
@@ -104,12 +97,17 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        let noToolProb = parseFloat(noToolProbabilityInput.value);
+        if (isNaN(noToolProb) || noToolProb < 0 || noToolProb > 1) {
+            noToolProb = 0;
+            noToolProbabilityInput.value = '0';
+        }
+
         testSentences = [];
         sentencesTableBody.innerHTML = '';
         
         for (let i = 0; i < size; i++) {
-            // 25% chance to pick from noToolRequests
-            const useNoTool = Math.random() < 0.25;
+            const useNoTool = Math.random() < noToolProb;
             if (useNoTool) {
                 const sentenceTemplate = noToolRequests[Math.floor(Math.random() * noToolRequests.length)];
                 testSentences.push({
@@ -137,15 +135,12 @@ document.addEventListener('DOMContentLoaded', () => {
         testSentences.forEach((item, index) => {
             const row = document.createElement('tr');
 
-            // Index
             const idxCell = document.createElement('td');
             idxCell.textContent = index + 1;
 
-            // Sentence cell (editable)
             const sentenceCell = document.createElement('td');
             sentenceCell.textContent = item.sentence;
 
-            // Edit sentence button cell
             const editSentenceCell = document.createElement('td');
             const editSentenceBtn = document.createElement('button');
             editSentenceBtn.className = 'btn btn-sm btn-outline-secondary';
@@ -153,18 +148,15 @@ document.addEventListener('DOMContentLoaded', () => {
             editSentenceBtn.addEventListener('click', () => startEditSentence(row, index));
             editSentenceCell.appendChild(editSentenceBtn);
 
-            // Expected Tool cell (dropdown)
             const expectedToolCell = document.createElement('td');
             const select = document.createElement('select');
             select.className = 'form-select form-select-sm';
-            // Two options: none or get_current_weather
             const optionNone = document.createElement('option');
             optionNone.value = 'none';
             optionNone.textContent = 'none';
             const optionWeather = document.createElement('option');
             optionWeather.value = 'get_current_weather';
             optionWeather.textContent = 'get_current_weather';
-
             select.appendChild(optionNone);
             select.appendChild(optionWeather);
             select.value = item.expected_tool;
@@ -208,37 +200,48 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    let toolExpectedSuccessCount_LLM1 = 0;
+    let toolExpectedFailCount_LLM1 = 0;
+    let noneExpectedSuccessCount_LLM1 = 0;
+    let noneExpectedFailCount_LLM1 = 0;
+
+    let toolExpectedSuccessCount_LLM2 = 0;
+    let toolExpectedFailCount_LLM2 = 0;
+    let noneExpectedSuccessCount_LLM2 = 0;
+    let noneExpectedFailCount_LLM2 = 0;
+
     startBenchmarkBtn.addEventListener('click', async () => {
         startBenchmarkBtn.disabled = true;
+        // Clear logs at start
+        logsContainerLLM1.innerHTML = '';
+        logsContainerLLM2.innerHTML = '';
 
         const llm1Base = llm1BaseURLInput.value.trim();
-        const llm1Model = llm1ModelNameInput.value.trim();
+        llm1ModelGlobal = llm1ModelNameInput.value.trim();
         const llm2Base = llm2BaseURLInput.value.trim();
-        const llm2Model = llm2ModelNameInput.value.trim();
+        llm2ModelGlobal = llm2ModelNameInput.value.trim();
 
-        if (!llm1Base || !llm1Model) {
+        if (!llm1Base || !llm1ModelGlobal) {
             alert("Please provide at least LLM 1 Base URL and Model Name.");
             startBenchmarkBtn.disabled = false;
             return;
         }
 
-        llm1Header.innerHTML = `<i class="bi bi-cpu me-2"></i>${llm1Model} Results`;
-        if (llm2Base && llm2Model) {
-            llm2Header.innerHTML = `<i class="bi bi-cpu me-2"></i>${llm2Model} Results`;
+        llm1Header.innerHTML = `<i class="bi bi-cpu me-2"></i>${llm1ModelGlobal} Results`;
+        if (llm2Base && llm2ModelGlobal) {
+            llm2Header.innerHTML = `<i class="bi bi-cpu me-2"></i>${llm2ModelGlobal} Results`;
+            logsColumnLLM2.style.display = 'block';
+            document.getElementById('logsLLM2Header').textContent = `${llm2ModelGlobal} Logs`;
+        } else {
+            llm2CardContainer.style.display = "none";
+            logsColumnLLM2.style.display = 'none';
         }
 
         resetLLMResults(1);
         resetLLMResults(2);
 
-        if (llm2Base && llm2Model) {
-            llm2CardContainer.style.display = "block";
-        } else {
-            llm2CardContainer.style.display = "none";
-        }
-
         loggingEnabled = enableLoggingCheck.checked;
         logsCard.style.display = loggingEnabled ? 'block' : 'none';
-        logsContainer.innerHTML = '';
 
         llm1Paused = false;
         llm2Paused = false;
@@ -253,13 +256,24 @@ document.addEventListener('DOMContentLoaded', () => {
         llm2ResumeBtn.disabled = true;
         llm2StopBtn.disabled = false;
 
+        // Reset detailed stats
+        toolExpectedSuccessCount_LLM1 = 0;
+        toolExpectedFailCount_LLM1 = 0;
+        noneExpectedSuccessCount_LLM1 = 0;
+        noneExpectedFailCount_LLM1 = 0;
+
+        toolExpectedSuccessCount_LLM2 = 0;
+        toolExpectedFailCount_LLM2 = 0;
+        noneExpectedSuccessCount_LLM2 = 0;
+        noneExpectedFailCount_LLM2 = 0;
+
         const startTime = Date.now();
         console.log(`[${Date.now()}] Starting benchmarks with testSentences size = ${testSentences.length}`);
 
         const tasks = [];
-        tasks.push(runBenchmarkForLLM(1, llm1Base, llm1Model, testSentences));
-        if (llm2Base && llm2Model) {
-            tasks.push(runBenchmarkForLLM(2, llm2Base, llm2Model, testSentences));
+        tasks.push(runBenchmarkForLLM(1, llm1Base, llm1ModelGlobal, testSentences));
+        if (llm2Base && llm2ModelGlobal) {
+            tasks.push(runBenchmarkForLLM(2, llm2Base, llm2ModelGlobal, testSentences));
         }
 
         await Promise.all(tasks);
@@ -269,9 +283,45 @@ document.addEventListener('DOMContentLoaded', () => {
         totalTimeElem.textContent = `${totalTime.toFixed(2)} ms`;
         console.log(`[${Date.now()}] All benchmarks completed. Total time: ${totalTime.toFixed(2)} ms`);
 
-        // Allow rerun
+        showDetailedStats();
         startBenchmarkBtn.disabled = false;
     });
+
+    function showDetailedStats() {
+        const statsDiv = summaryCard.querySelector('.detailed-stats');
+        statsDiv.innerHTML = '';
+
+        function renderStats(llmName, toolSuccess, toolFail, noneSuccess, noneFail) {
+            const totalTool = toolSuccess + toolFail;
+            const totalNone = noneSuccess + noneFail;
+
+            const toolPassRate = totalTool > 0 ? ((toolSuccess / totalTool)*100).toFixed(2) : 'N/A';
+            const nonePassRate = totalNone > 0 ? ((noneSuccess / totalNone)*100).toFixed(2) : 'N/A';
+
+            return `
+                <div class="card mb-3">
+                  <div class="card-header"><h6 class="mb-0"><i class="bi bi-bar-chart me-2"></i>${llmName} Detailed Stats</h6></div>
+                  <div class="card-body p-2 small">
+                    <p class="mb-1"><strong>Tool Expected:</strong> ${toolSuccess} success, ${toolFail} fail, Pass Rate: ${toolPassRate}%</p>
+                    <p class="mb-0"><strong>No Tool Expected:</strong> ${noneSuccess} success, ${noneFail} fail, Pass Rate: ${nonePassRate}%</p>
+                  </div>
+                </div>
+            `;
+        }
+
+        let html = '<div class="row">';
+        html += '<div class="col-md-6">';
+        html += renderStats(llm1ModelGlobal, toolExpectedSuccessCount_LLM1, toolExpectedFailCount_LLM1, noneExpectedSuccessCount_LLM1, noneExpectedFailCount_LLM1);
+        html += '</div>';
+
+        if (llm2CardContainer.style.display !== 'none') {
+            html += '<div class="col-md-6">';
+            html += renderStats(llm2ModelGlobal, toolExpectedSuccessCount_LLM2, toolExpectedFailCount_LLM2, noneExpectedSuccessCount_LLM2, noneExpectedFailCount_LLM2);
+            html += '</div>';
+        }
+        html += '</div>';
+        statsDiv.innerHTML = html;
+    }
 
     llm1PauseBtn.addEventListener('click', () => {
         llm1Paused = true;
@@ -317,11 +367,32 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log(`[${Date.now()}] Stopped LLM2`);
     });
 
+    showOnlyFailedLogsCheck.addEventListener('change', () => {
+        const showOnlyFailed = showOnlyFailedLogsCheck.checked;
+        filterLogsContainer(logsContainerLLM1, showOnlyFailed);
+        filterLogsContainer(logsContainerLLM2, showOnlyFailed);
+    });
+
+    function filterLogsContainer(container, showOnlyFailed) {
+        const entries = container.querySelectorAll('.log-entry');
+        entries.forEach(e => {
+            if (showOnlyFailed) {
+                if (!e.classList.contains('failed-log-entry')) {
+                    e.style.display = 'none';
+                } else {
+                    e.style.display = 'block';
+                }
+            } else {
+                e.style.display = 'block';
+            }
+        });
+    }
+
     async function runBenchmarkForLLM(llmNumber, baseURL, modelName, sentences) {
         console.log(`[${Date.now()}] LLM${llmNumber} starting processing ${sentences.length} sentences.`);
         let successCount = 0;
         let failureCount = 0;
-        let totalResponseTime = 0; // Will accumulate server-reported time_taken
+        let totalResponseTime = 0;
 
         const isLLM1 = (llmNumber === 1);
         const currentSection = isLLM1 ? llm1CurrentSection : llm2CurrentSection;
@@ -336,6 +407,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const pauseVar = isLLM1 ? () => llm1Paused : () => llm2Paused;
         const stopVar = isLLM1 ? () => llm1Stopped : () => llm2Stopped;
+
+        const logsContainer = isLLM1 ? logsContainerLLM1 : logsContainerLLM2;
 
         for (let i = 0; i < sentences.length; i++) {
             if (stopVar()) {
@@ -385,20 +458,27 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log(`[${Date.now()}] LLM${llmNumber} received response for sentence #${i+1} in ${elapsed} ms`, data);
 
             if (loggingEnabled) {
-                const logEntry = {
+                const entryDiv = document.createElement('div');
+                entryDiv.classList.add('log-entry');
+                if (!data.success) {
+                    entryDiv.classList.add('failed-log-entry');
+                }
+                // Create a pre element for professional look
+                const preElem = document.createElement('pre');
+                preElem.className = 'small mb-2';
+                preElem.textContent = JSON.stringify({
                     llm: llmNumber,
                     sentence_index: i+1,
                     request: payload,
                     response: data,
                     time_ms: elapsed.toString()
-                };
-                const entryDiv = document.createElement('div');
-                entryDiv.classList.add('log-entry');
-                entryDiv.textContent = JSON.stringify(logEntry, null, 2);
+                }, null, 2);
+                entryDiv.appendChild(preElem);
                 logsContainer.appendChild(entryDiv);
             }
 
-            if (data.success) {
+            const successThis = data.success;
+            if (successThis) {
                 successCount++;
                 const respText = data.model_response && data.model_response.trim().length > 0 ? data.model_response : "No response";
                 currentResponseElem.textContent = respText;
@@ -408,6 +488,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 li.classList.add('list-group-item');
                 li.innerHTML = `<strong>#${i+1}:</strong> Success | <em>${elapsed} ms</em>`;
                 resultsList.appendChild(li);
+
+                if (expected_tool === "get_current_weather") {
+                    if (isLLM1) toolExpectedSuccessCount_LLM1++;
+                    else toolExpectedSuccessCount_LLM2++;
+                } else {
+                    if (isLLM1) noneExpectedSuccessCount_LLM1++;
+                    else noneExpectedSuccessCount_LLM2++;
+                }
+
             } else {
                 failureCount++;
                 const errResp = `Error: ${data.error || 'Unknown'}`;
@@ -418,6 +507,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 li.classList.add('list-group-item', 'list-group-item-danger');
                 li.innerHTML = `<strong>#${i+1}:</strong> Failed | <em>${elapsed} ms</em>`;
                 resultsList.appendChild(li);
+
+                if (expected_tool === "get_current_weather") {
+                    if (isLLM1) toolExpectedFailCount_LLM1++;
+                    else toolExpectedFailCount_LLM2++;
+                } else {
+                    if (isLLM1) noneExpectedFailCount_LLM1++;
+                    else noneExpectedFailCount_LLM2++;
+                }
             }
 
             successCountElem.textContent = successCount;

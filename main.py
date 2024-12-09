@@ -20,7 +20,11 @@ prompt = PromptTemplate(
         - Only use available tools when the request explicitly requires external information or actions you cannot perform directly.
         - Avoid using tools for general questions or tasks you can handle without external assistance (e.g., answering general knowledge questions, casual conversations, or creative requests).
         - When using a tool, ensure it is relevant to the request and provide the necessary arguments accurately.
-        - If no tools are needed, respond directly to the user request without invoking any tools.
+        - Do not invoke a tool if it is not listed in your available tools.
+        - Your available tools are:
+          - `get_current_weather`: Provides the current weather information for a specified location.
+          - `get_system_time`: Provides the current system time.
+        - If no tools are needed or the requested tool is unavailable, respond directly to the user's request without invoking any tools.
     <|eot_id|>
     <|start_header_id|>user<|end_header_id|>
         Conduct a comprehensive analysis of the request provided.
@@ -85,45 +89,45 @@ async def benchmark(req: BenchmarkRequest):
 
     if hasattr(result, 'tool_calls') and result.tool_calls:
         for tc in result.tool_calls:
-            tool_name = tc.get("name", "")
+            tool_name = tc.get("name", "").lower()
 
             # Strict success criteria based on expected_tool before execution
             if req.expected_tool:
-                if req.expected_tool == "none":
-                    # If no tools should be called, success should remain true for empty tool names
-                    if tool_name:
+                if req.expected_tool.lower() == "none":
+                    # If no tools should be called, success should remain true for empty or "none" tool names
+                    if tool_name and tool_name != "none":
                         success = False
                         tool_calls_data.append({
-                            "name": tool_name,
+                            "name": tc.get("name", ""),
                             "args": tc.get("args", {}),
                             "output": "Tool execution error :: Tool call was not required, tool execution skipped."
                         })
                         break
-                elif req.expected_tool != tool_name:
+                elif req.expected_tool.lower() != tool_name:
                     # If the wrong tool is being called, fail immediately
                     success = False
                     tool_calls_data.append({
-                        "name": tool_name,
+                        "name": tc.get("name", ""),
                         "args": tc.get("args", {}),
                         "output": "Tool execution error :: Wrong tool called, tool execution skipped."
                     })
                     break
 
             try:
-                tool_output = tool_mapping[tool_name].invoke(tc.get("args", {})) if tool_name else ""
+                tool_output = tool_mapping[tool_name].invoke(tc.get("args", {})) if tool_name and tool_name != "none" else ""
             except Exception as e:
                 tool_output = f"Tool execution error: {str(e)}"
                 success = False
             if "Tool execution error" in tool_output:
                 success = False
             tool_calls_data.append({
-                "name": tool_name,
+                "name": tc.get("name", ""),
                 "args": tc.get("args", {}),
                 "output": tool_output
             })
 
     # Adjust success criteria for expected_tool == "none"
-    if req.expected_tool == "none" and all(not tc.get("name", "") for tc in result.tool_calls):
+    if req.expected_tool and req.expected_tool.lower() == "none" and all(not tc.get("name", "") or tc.get("name", "").lower() == "none" for tc in result.tool_calls):
         success = True
 
     # Determine final success
@@ -132,7 +136,7 @@ async def benchmark(req: BenchmarkRequest):
         for tc in tool_calls_data
     )
 
-    if model_response == "" and not successful_tool_output and req.expected_tool != "none":
+    if model_response == "" and not successful_tool_output and req.expected_tool and req.expected_tool.lower() != "none":
         success = False
 
     return build_response(success=success, req=req, model_response=model_response, tool_calls_data=tool_calls_data, start_time=start_time)
