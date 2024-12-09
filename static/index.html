@@ -39,11 +39,11 @@
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">LLM 1 Base URL</label>
-                            <input type="text" class="form-control" id="llm1BaseURL" placeholder="http://localhost:11435" />
+                            <input type="text" class="form-control" id="llm1BaseURL" value="http://localhost:11434" />
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">LLM 1 Model Name</label>
-                            <input type="text" class="form-control" id="llm1ModelName" placeholder="llama3.3:latest" />
+                            <input type="text" class="form-control" id="llm1ModelName" value="llama3.3" />
                         </div>
 
                         <!-- LLM 2 Configuration -->
@@ -65,11 +65,11 @@
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Test Suite Size</label>
-                            <input type="number" class="form-control" id="testSuiteSize" placeholder="10" min="1" />
+                            <input type="number" class="form-control" id="testSuiteSize" value="10" min="1" />
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">No-tool Probability (0-1)</label>
-                            <input type="number" step="0.05" min="0" max="1" class="form-control" id="noToolProbability" placeholder="0.25" />
+                            <input type="number" step="0.05" min="0" max="1" class="form-control" id="noToolProbability" value="0" />
                         </div>
                         <div class="col-md-4 d-flex align-items-end">
                             <div class="form-check ms-1 mb-2">
@@ -210,9 +210,7 @@
         </div>
         <div class="card-body">
             <div class="small mb-3"><strong>Total Time Taken:</strong> <span id="totalTime">0 ms</span></div>
-            <div class="detailed-stats mt-3">
-                <!-- Detailed stats will be appended here -->
-            </div>
+            <div class="detailed-stats mt-3"></div>
         </div>
     </div>
 
@@ -228,8 +226,20 @@
                 </div>
             </div>
         </div>
-        <div class="card-body" style="height: 300px; overflow-y:auto;" id="logsContainer">
-            <!-- Log entries will appear here -->
+        <!-- Two-column layout for logs if LLM 2 present, else one column -->
+        <div class="card-body" style="height: 300px; overflow-y:auto;">
+            <div class="row h-100" id="logsContainerRow">
+                <!-- LLM1 Logs -->
+                <div class="col-md-6" id="logsContainerLLM1">
+                    <h6 class="fw-bold" id="logsLLM1Header">LLM 1 Logs</h6>
+                    <div class="logs-inner" style="height:calc(100% - 30px); overflow-y:auto;"></div>
+                </div>
+                <!-- LLM2 Logs -->
+                <div class="col-md-6" id="logsContainerLLM2" style="display:none;">
+                    <h6 class="fw-bold" id="logsLLM2Header">LLM 2 Logs</h6>
+                    <div class="logs-inner" style="height:calc(100% - 30px); overflow-y:auto;"></div>
+                </div>
+            </div>
         </div>
     </div>
 

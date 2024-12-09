@@ -13,12 +13,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const enableLoggingCheck = document.getElementById('enableLogging');
     const sentencesTableBody = document.querySelector('#sentencesTable tbody');
     const totalTimeElem = document.getElementById('totalTime');
+
     const logsCard = document.getElementById('logsCard');
-    const logsColumnLLM1 = document.getElementById('logsColumnLLM1');
-    const logsColumnLLM2 = document.getElementById('logsColumnLLM2');
-    const logsContainerLLM1 = document.getElementById('logsContainerLLM1');
-    const logsContainerLLM2 = document.getElementById('logsContainerLLM2');
+    const logsContainerRow = document.getElementById('logsContainerRow');
+    const logsContainerLLM1 = document.querySelector('#logsContainerLLM1 .logs-inner');
+    const logsContainerLLM2 = document.querySelector('#logsContainerLLM2 .logs-inner');
+    const logsLLM1Header = document.getElementById('logsLLM1Header');
+    const logsLLM2Header = document.getElementById('logsLLM2Header');
+
     const showOnlyFailedLogsCheck = document.getElementById('showOnlyFailedLogs');
+    const logsCardHeader = logsCard.querySelector('.card-header');
+    const clearLogsBtn = logsCardHeader.querySelector('button.btn-outline-secondary');
 
     const llm1Header = document.getElementById('llm1Header');
     const llm1ProgressText = document.getElementById('llm1ProgressText');
@@ -212,7 +217,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     startBenchmarkBtn.addEventListener('click', async () => {
         startBenchmarkBtn.disabled = true;
-        // Clear logs at start
+
+        // Clear logs
         logsContainerLLM1.innerHTML = '';
         logsContainerLLM2.innerHTML = '';
 
@@ -228,13 +234,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         llm1Header.innerHTML = `<i class="bi bi-cpu me-2"></i>${llm1ModelGlobal} Results`;
+        logsLLM1Header.textContent = `${llm1ModelGlobal} Logs`;
+
         if (llm2Base && llm2ModelGlobal) {
             llm2Header.innerHTML = `<i class="bi bi-cpu me-2"></i>${llm2ModelGlobal} Results`;
-            logsColumnLLM2.style.display = 'block';
-            document.getElementById('logsLLM2Header').textContent = `${llm2ModelGlobal} Logs`;
+            logsLLM2Header.textContent = `${llm2ModelGlobal} Logs`;
+            llm2CardContainer.style.display = "block";
+            document.getElementById('logsContainerLLM2').style.display = 'block';
         } else {
             llm2CardContainer.style.display = "none";
-            logsColumnLLM2.style.display = 'none';
+            document.getElementById('logsContainerLLM2').style.display = 'none';
         }
 
         resetLLMResults(1);
@@ -367,24 +376,33 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log(`[${Date.now()}] Stopped LLM2`);
     });
 
-    showOnlyFailedLogsCheck.addEventListener('change', () => {
-        const showOnlyFailed = showOnlyFailedLogsCheck.checked;
-        filterLogsContainer(logsContainerLLM1, showOnlyFailed);
-        filterLogsContainer(logsContainerLLM2, showOnlyFailed);
+    // Clear logs event
+    clearLogsBtn.addEventListener('click', () => {
+        logsContainerLLM1.innerHTML = '';
+        logsContainerLLM2.innerHTML = '';
     });
 
-    function filterLogsContainer(container, showOnlyFailed) {
-        const entries = container.querySelectorAll('.log-entry');
-        entries.forEach(e => {
-            if (showOnlyFailed) {
-                if (!e.classList.contains('failed-log-entry')) {
-                    e.style.display = 'none';
+    showOnlyFailedLogsCheck.addEventListener('change', () => {
+        const showOnlyFailed = showOnlyFailedLogsCheck.checked;
+        filterLogs(showOnlyFailed);
+    });
+
+    function filterLogs(showOnlyFailed) {
+        const allEntries1 = logsContainerLLM1.querySelectorAll('.log-entry');
+        const allEntries2 = logsContainerLLM2.querySelectorAll('.log-entry');
+
+        [allEntries1, allEntries2].forEach(entries => {
+            entries.forEach(e => {
+                if (showOnlyFailed) {
+                    if (!e.classList.contains('failed-log-entry')) {
+                        e.style.display = 'none';
+                    } else {
+                        e.style.display = 'block';
+                    }
                 } else {
                     e.style.display = 'block';
                 }
-            } else {
-                e.style.display = 'block';
-            }
+            });
         });
     }
 
@@ -458,23 +476,25 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log(`[${Date.now()}] LLM${llmNumber} received response for sentence #${i+1} in ${elapsed} ms`, data);
 
             if (loggingEnabled) {
-                const entryDiv = document.createElement('div');
-                entryDiv.classList.add('log-entry');
+                const logEntryContainer = document.createElement('div');
+                logEntryContainer.classList.add('log-entry', 'mb-2', 'p-2', 'border', 'rounded');
                 if (!data.success) {
-                    entryDiv.classList.add('failed-log-entry');
+                    logEntryContainer.classList.add('failed-log-entry');
                 }
-                // Create a pre element for professional look
-                const preElem = document.createElement('pre');
-                preElem.className = 'small mb-2';
-                preElem.textContent = JSON.stringify({
+
+                const pre = document.createElement('pre');
+                pre.classList.add('mb-0', 'small');
+                // Format the JSON nicely
+                pre.textContent = JSON.stringify({
                     llm: llmNumber,
                     sentence_index: i+1,
                     request: payload,
                     response: data,
                     time_ms: elapsed.toString()
                 }, null, 2);
-                entryDiv.appendChild(preElem);
-                logsContainer.appendChild(entryDiv);
+
+                logEntryContainer.appendChild(pre);
+                logsContainer.appendChild(logEntryContainer);
             }
 
             const successThis = data.success;
