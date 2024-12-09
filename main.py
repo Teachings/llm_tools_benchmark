@@ -6,35 +6,31 @@ from pydantic import BaseModel
 import uvicorn
 
 from tools import get_current_weather, get_system_time
+from langchain.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
 from langchain_ollama import ChatOllama
 from langchain_core.messages import AIMessage
-from langchain_core.prompts import PromptTemplate
 
-prompt = PromptTemplate(
-    template="""
-    <|begin_of_text|>
-    <|start_header_id|>system<|end_header_id|>
-        You are an intelligent assistant designed to analyze user requests accurately.
-        You must:
-        - Always analyze the user's request to understand its intent.
-        - Only use available tools when the request explicitly requires external information or actions you cannot perform directly.
-        - Avoid using tools for general questions or tasks you can handle without external assistance (e.g., answering general knowledge questions, casual conversations, or creative requests).
-        - When using a tool, ensure it is relevant to the request and provide the necessary arguments accurately.
-        - Do not invoke a tool if it is not listed in your available tools.
-        - Your available tools are:
-          - `get_current_weather`: Provides the current weather information for a specified location.
-          - `get_system_time`: Provides the current system time.
-        - If no tools are needed or the requested tool is unavailable, respond directly to the user's request without invoking any tools.
-    <|eot_id|>
-    <|start_header_id|>user<|end_header_id|>
-        Conduct a comprehensive analysis of the request provided.
-        USER REQUEST:\n\n {initial_request} \n\n
-    <|eot_id|>
-    <|start_header_id|>assistant<|end_header_id|>
-    """,
-    input_variables=["initial_request"],
+# Define the system message
+system_message = SystemMessagePromptTemplate.from_template(
+    "You are an intelligent assistant designed to analyze user requests accurately. "
+    "You must:\n"
+    "- Always analyze the user's request to understand its intent.\n"
+    "- Only use available tools when the request explicitly requires external information or actions you cannot perform directly.\n"
+    "- Avoid using tools for general questions or tasks you can handle without external assistance (e.g., answering general knowledge questions, casual conversations, or creative requests).\n"
+    "- When using a tool, ensure it is relevant to the request and provide the necessary arguments accurately.\n"
+    "- Do not invoke a tool if it is not listed in your available tools.\n"
+    "- Your available tools are:\n"
+    "  - `get_current_weather`: Provides the current weather information for a specified location.\n"
+    "  - `get_system_time`: Provides the current system time.\n"
+    "- If no tools are needed or the requested tool is unavailable, respond directly to the user's request without invoking any tools."
 )
 
+user_message = HumanMessagePromptTemplate.from_template(
+    "Conduct a comprehensive analysis of the request provided.\n"
+    "USER REQUEST:\n\n{initial_request}\n\n"
+)
+
+chat_prompt = ChatPromptTemplate.from_messages([system_message, user_message])
 tool_mapping = {
     'get_current_weather': get_current_weather,
     'get_system_time': get_system_time,
@@ -73,7 +69,7 @@ async def benchmark(req: BenchmarkRequest):
     model_with_tools = model.bind_tools(
         tools=[get_current_weather, get_system_time],
     )
-    agent_request_generator = prompt | model_with_tools
+    agent_request_generator = chat_prompt | model_with_tools
 
     try:
         result = agent_request_generator.invoke({"initial_request": req.sentence})
@@ -91,10 +87,8 @@ async def benchmark(req: BenchmarkRequest):
         for tc in result.tool_calls:
             tool_name = tc.get("name", "").lower()
 
-            # Strict success criteria based on expected_tool before execution
             if req.expected_tool:
                 if req.expected_tool.lower() == "none":
-                    # If no tools should be called, success should remain true for empty or "none" tool names
                     if tool_name and tool_name != "none":
                         success = False
                         tool_calls_data.append({
@@ -104,7 +98,6 @@ async def benchmark(req: BenchmarkRequest):
                         })
                         break
                 elif req.expected_tool.lower() != tool_name:
-                    # If the wrong tool is being called, fail immediately
                     success = False
                     tool_calls_data.append({
                         "name": tc.get("name", ""),
@@ -126,11 +119,9 @@ async def benchmark(req: BenchmarkRequest):
                 "output": tool_output
             })
 
-    # Adjust success criteria for expected_tool == "none"
     if req.expected_tool and req.expected_tool.lower() == "none" and all(not tc.get("name", "") or tc.get("name", "").lower() == "none" for tc in result.tool_calls):
         success = True
 
-    # Determine final success
     successful_tool_output = any(
         tc["output"] and "Tool execution error" not in tc["output"] 
         for tc in tool_calls_data
